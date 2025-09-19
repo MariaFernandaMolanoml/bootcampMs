@@ -3,6 +3,7 @@ package com.example.bootcamp.infraestructure.adapters;
 import com.example.bootcamp.domain.model.Bootcamp;
 import com.example.bootcamp.domain.spi.IBootcampPersistencePort;
 import com.example.bootcamp.infraestructure.adapters.entity.BootcampCapacityEntity;
+import com.example.bootcamp.infraestructure.adapters.entity.BootcampEntity;
 import com.example.bootcamp.infraestructure.adapters.mapper.IBootcampEntityMapper;
 import com.example.bootcamp.infraestructure.adapters.repository.IBootcampCapacityRepository;
 import com.example.bootcamp.infraestructure.adapters.repository.IBootcampRepository;
@@ -27,8 +28,16 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
 
     @Override
     public Mono<Bootcamp> saveBootcamp(Bootcamp bootcamp) {
-        return bootcampRepository.save(bootcampEntityMapper.toEntity(bootcamp))
-                .map(bootcampEntityMapper::toModel);
+        BootcampEntity entity = bootcampEntityMapper.toEntity(bootcamp);
+
+        return bootcampRepository.insertBootcamp(
+                        entity.getId(),
+                        entity.getName(),
+                        entity.getDescription(),
+                        entity.getLaunchDate(),
+                        entity.getDurationInDays()
+                )
+                .thenReturn(bootcamp);
     }
 
     @Override
@@ -36,13 +45,11 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
         log.info("Saving capacities for bootcamp {}: {}", bootcampId, capacities);
 
         return Flux.fromIterable(capacities)
-                .map(capacityId -> BootcampCapacityEntity.builder()
-                        .id(UUID.randomUUID())
-                        .bootcampId(bootcampId)
-                        .capacityId(capacityId)
-                        .build())
-                .collectList()
-                .flatMapMany(bootcampCapacityRepository::saveAll)
+                .flatMap(capacityId -> bootcampCapacityRepository.saveBootcampCapacity(
+                        UUID.randomUUID(),
+                        bootcampId,
+                        capacityId
+                ))
                 .then();
     }
 
