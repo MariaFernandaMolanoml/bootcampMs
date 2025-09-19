@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS bootcamps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description VARCHAR(255) NOT NULL,
     launch_date DATE NOT NULL,

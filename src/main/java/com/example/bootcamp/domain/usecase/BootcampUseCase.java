@@ -23,7 +23,15 @@ public class BootcampUseCase implements IBootcampServicePort {
 
     @Override
     public Mono<Bootcamp> registerBootcamp(Bootcamp bootcamp, List<UUID> capabilities) {
-
+        UUID newBootcampId = UUID.randomUUID();
+        Bootcamp bootcampToSave = new Bootcamp(
+                newBootcampId,
+                bootcamp.name(),
+                bootcamp.description(),
+                bootcamp.launchDate(),
+                bootcamp.durationInDays(),
+                bootcamp.capabilities()
+        );
         if (capabilities.isEmpty() || capabilities.size() > Constants.MAX_COUNT) {
             return Mono.error(new DomainException(Message.RANGE_CAPACITIES));
         }
@@ -33,7 +41,7 @@ public class BootcampUseCase implements IBootcampServicePort {
             return Mono.error(new DomainException(Message.DUPLICATE_CAPACITIES));
         }
 
-        return bootcampPersistencePort.existByName(bootcamp.name())
+        return bootcampPersistencePort.existByName(bootcampToSave.name())
                 .filter(exists -> !exists)
                 .switchIfEmpty(Mono.error(new DomainException(Message.BOOTCAMP_ALREADY_EXISTS)))
                 .flatMap(ignored -> bootcampPersistencePort.validateExistingCapacity(capabilities))
@@ -41,11 +49,11 @@ public class BootcampUseCase implements IBootcampServicePort {
                     if (!allExist) {
                         return Mono.error(new DomainException(Message.INVALID_CAPACITIES));
                     }
-                    return bootcampPersistencePort.saveBootcamp(bootcamp)
+                    return bootcampPersistencePort.saveBootcamp(bootcampToSave)
                             .flatMap(savedBootcamp ->
                                     bootcampPersistencePort.saveBootcampCapacity(savedBootcamp.id(), capabilities)
                                             .thenReturn(savedBootcamp)
                             );
                 });
     }
-    }
+}
