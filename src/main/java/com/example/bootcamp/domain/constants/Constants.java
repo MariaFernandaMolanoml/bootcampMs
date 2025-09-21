@@ -7,4 +7,8 @@ public class Constants {
 
     public static final int MAX_COUNT = 4;
     public static final int MIN_COUNT = 1;
+
+    public static final int ZERO = 0;
+    public static final String ASC = "ASC";
+    public static final String DESC = "DESC";
 }
