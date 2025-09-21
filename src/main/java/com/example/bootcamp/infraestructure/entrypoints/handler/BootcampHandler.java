@@ -88,4 +88,28 @@ public class BootcampHandler {
                     return ServerResponse.ok().bodyValue(bootcamps);
                 });
     }
+    public Mono<ServerResponse> deleteBootcamp(ServerRequest request) {
+        UUID bootcampId = UUID.fromString(request.pathVariable("id")); // coincidir con el router
+        return bootcampServicePort.deleteBootcamp(bootcampId)
+                .then(Mono.defer(() -> {
+                    ApiResponse response = ApiResponse.builder()
+                            .code("BOOTCAMP_DELETED")
+                            .message("Bootcamp eliminado correctamente")
+                            .data(null)
+                            .date(Instant.now().toString())
+                            .build();
+                    return ServerResponse.ok().bodyValue(response);
+                }))
+                .onErrorResume(ex -> {
+                    log.error("Error eliminando bootcamp {}", bootcampId, ex);
+                    ApiResponse response = ApiResponse.builder()
+                            .code("DELETE_ERROR")
+                            .message("Error al eliminar el bootcamp: " + ex.getMessage())
+                            .data(null)
+                            .date(Instant.now().toString())
+                            .build();
+                    return ServerResponse.status(HttpStatus.INTERNAL_SERVER_ERROR).bodyValue(response);
+                });
+    }
+
 }

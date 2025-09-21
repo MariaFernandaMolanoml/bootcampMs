@@ -168,4 +168,37 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
                 })
                 .flatMapMany(Flux::fromIterable);
     }
+    @Override
+    public Mono<List<UUID>> findCapabilitiesByBootcampId(UUID bootcampId) {
+        return bootcampCapacityRepository.findByBootcampId(bootcampId)
+                .map(BootcampCapacityEntity::getCapacityId)
+                .collectList();
+    }
+
+    @Override
+    public Mono<Void> deleteBootcamp(UUID bootcampId) {
+        return findCapabilitiesByBootcampId(bootcampId)
+                .flatMapMany(Flux::fromIterable)
+                .flatMap(capacityId ->
+                        // 2. llamar al MS capabilities para eliminar relación si ya no hay referencias
+                        webClient.delete()
+                                .uri("/capabilities/{id}/bootcamp/{bootcampId}", capacityId, bootcampId)
+                                .retrieve()
+                                .bodyToMono(Void.class)
+                                .onErrorResume(ex -> {
+                                    // loguear y continuar
+                                    log.error("Error eliminando capacidad {} para bootcamp {}", capacityId, bootcampId, ex);
+                                    return Mono.empty();
+                                })
+                )
+                .thenMany(
+                        // 3. eliminar relaciones de bootcamp_capabilities
+                        bootcampCapacityRepository.findByBootcampId(bootcampId)
+                                .flatMap(rel -> bootcampCapacityRepository.deleteById(rel.getId()))
+                )
+                .then(
+                        // 4. eliminar el bootcamp
+                        bootcampRepository.deleteById(bootcampId)
+                );
+    }
 }

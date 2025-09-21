@@ -62,4 +62,9 @@ public class BootcampUseCase implements IBootcampServicePort {
     public Flux<BootcampWithCapability> getAllBootcamps(String order, String sortBy, int page, int size) {
         return bootcampPersistencePort.getAllBootcamps(order, sortBy, page, size);
     }
+
+    @Override
+    public Mono<Void> deleteBootcamp(UUID bootcampId) {
+        return bootcampPersistencePort.deleteBootcamp(bootcampId);
+    }
 }

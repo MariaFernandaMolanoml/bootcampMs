@@ -14,4 +14,7 @@ public interface IBootcampPersistencePort {
     Mono<Boolean> existByName(String name);
     Mono<Boolean> validateExistingCapacity(List<UUID> capabilities);
     Flux<BootcampWithCapability> getAllBootcamps(String order, String sortBy, int page, int size);
+
+    Mono<Void> deleteBootcamp(UUID bootcampId);
+    Mono<List<UUID>> findCapabilitiesByBootcampId(UUID bootcampId);
 }

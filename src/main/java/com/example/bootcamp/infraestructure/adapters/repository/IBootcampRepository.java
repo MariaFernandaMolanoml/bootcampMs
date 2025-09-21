@@ -12,7 +12,6 @@ import java.util.UUID;
 
 public interface IBootcampRepository extends ReactiveCrudRepository<BootcampEntity, UUID> {
     Mono<BootcampEntity> findByName(String name);
-    Mono<Boolean> existsByName(String name);
     @Query("INSERT INTO bootcamps (id, name, description, launch_date, duration_in_days) " +
             "VALUES (:id, :name, :description, :launchDate, :durationInDays)")
     Mono<Void> insertBootcamp(@Param("id") UUID id,
