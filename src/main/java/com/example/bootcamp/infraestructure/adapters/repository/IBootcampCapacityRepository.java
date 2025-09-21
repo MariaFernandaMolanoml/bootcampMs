@@ -4,6 +4,7 @@ import com.example.bootcamp.infraestructure.adapters.entity.BootcampCapacityEnti
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -14,5 +15,6 @@ public interface IBootcampCapacityRepository extends ReactiveCrudRepository<Boot
     Mono<Void> saveBootcampCapacity(@Param("id") UUID id,
                                     @Param("bootcampId") UUID bootcampId,
                                     @Param("capacityId") UUID capacityId);
-
+    @Query("SELECT * FROM bootcamp_capabilities WHERE bootcamp_id = :bootcampId")
+    Flux<BootcampCapacityEntity> findByBootcampId(UUID bootcampId);
 }

@@ -6,6 +6,7 @@ import com.example.bootcamp.domain.model.Bootcamp;
 import com.example.bootcamp.infraestructure.entrypoints.dto.BootcampDTO;
 import com.example.bootcamp.infraestructure.entrypoints.mapper.BootcampMapper;
 import com.example.bootcamp.infraestructure.entrypoints.util.ApiResponse;
+import com.example.bootcamp.infraestructure.entrypoints.util.Constants;
 import com.example.bootcamp.infraestructure.entrypoints.util.ErrorDTO;
 import com.example.bootcamp.domain.enums.Message;
 import lombok.RequiredArgsConstructor;
@@ -71,5 +72,20 @@ public class BootcampHandler {
                 .date(Instant.now().toString())
                 .build();
         return ServerResponse.status(status).bodyValue(apiErrorResponse);
+    }
+    public Mono<ServerResponse> getAllBootcamps(ServerRequest request) {
+        String order = request.queryParam("order").orElse(Constants.ORDER_ASC);
+        String sortBy = request.queryParam("sortBy").orElse(Constants.SORT_BY_NAME);
+        int page = request.queryParam("page").map(Integer::parseInt).orElse(Constants.DEFAULT_PAGE);
+        int size = request.queryParam("size").map(Integer::parseInt).orElse(Constants.DEFAULT_SIZE);
+
+        return bootcampServicePort.getAllBootcamps(order, sortBy, page, size)
+                .collectList()
+                .flatMap(bootcamps -> {
+                    if (bootcamps.isEmpty()) {
+                        return ServerResponse.status(HttpStatus.OK).bodyValue("No bootcamps found");
+                    }
+                    return ServerResponse.ok().bodyValue(bootcamps);
+                });
     }
 }

@@ -4,6 +4,7 @@ import com.example.bootcamp.infraestructure.adapters.entity.BootcampEntity;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
@@ -19,4 +20,30 @@ public interface IBootcampRepository extends ReactiveCrudRepository<BootcampEnti
                               @Param("description") String description,
                               @Param("launchDate") LocalDate launchDate,
                               @Param("durationInDays") int durationInDays);
+
+
+    @Query("SELECT * FROM bootcamps ORDER BY name ASC LIMIT :limit OFFSET :offset")
+    Flux<BootcampEntity> findAllByNameAsc(int limit, int offset);
+
+    @Query("SELECT * FROM bootcamps ORDER BY name DESC LIMIT :limit OFFSET :offset")
+    Flux<BootcampEntity> findAllByNameDesc(int limit, int offset);
+
+    @Query("""
+           SELECT b.* FROM bootcamps b
+           JOIN bootcamp_capabilities bc ON b.id = bc.bootcamp_id
+           GROUP BY b.id
+           ORDER BY COUNT(bc.capability_id) ASC
+           LIMIT :limit OFFSET :offset
+           """)
+    Flux<BootcampEntity> findAllByCapabilityCountAsc(int limit, int offset);
+
+    @Query("""
+           SELECT b.* FROM bootcamps b
+           JOIN bootcamp_capabilities bc ON b.id = bc.bootcamp_id
+           GROUP BY b.id
+           ORDER BY COUNT(bc.capability_id) DESC
+           LIMIT :limit OFFSET :offset
+           """)
+    Flux<BootcampEntity> findAllByCapabilityCountDesc(int limit, int offset);
 }
+
