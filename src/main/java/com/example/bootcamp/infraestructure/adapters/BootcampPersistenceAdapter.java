@@ -1,5 +1,6 @@
 package com.example.bootcamp.infraestructure.adapters;
 
+import ch.qos.logback.core.joran.spi.HttpUtil;
 import com.example.bootcamp.domain.model.Bootcamp;
 import com.example.bootcamp.domain.model.BootcampWithCapability;
 import com.example.bootcamp.domain.model.Capability;
@@ -10,6 +11,7 @@ import com.example.bootcamp.infraestructure.adapters.entity.BootcampEntity;
 import com.example.bootcamp.infraestructure.adapters.mapper.IBootcampEntityMapper;
 import com.example.bootcamp.infraestructure.adapters.repository.IBootcampCapacityRepository;
 import com.example.bootcamp.infraestructure.adapters.repository.IBootcampRepository;
+import com.example.bootcamp.infraestructure.entrypoints.dto.BootcampReportRequest;
 import com.example.bootcamp.infraestructure.entrypoints.dto.CapacityDTO;
 import com.example.bootcamp.infraestructure.entrypoints.util.Constants;
 import lombok.AllArgsConstructor;
@@ -19,6 +21,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -37,6 +40,7 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
     public Mono<Bootcamp> saveBootcamp(Bootcamp bootcamp) {
         BootcampEntity entity = bootcampEntityMapper.toEntity(bootcamp);
 
+        // Insertamos bootcamp nuevo
         return bootcampRepository.insertBootcamp(
                         entity.getId(),
                         entity.getName(),
@@ -44,9 +48,90 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
                         entity.getLaunchDate(),
                         entity.getDurationInDays()
                 )
-                .thenReturn(bootcamp);
+                .thenReturn(bootcamp)
+                .flatMap(saved -> saveBootcampCapacity(saved.id(), saved.capabilities())
+                        .thenReturn(saved)
+                )
+                // Convertimos a BootcampWithCapability solo para enviar a reports
+                .flatMap(saved -> convertToBootcampWithCapability(saved)
+                        .flatMap(bwc -> sendBootcampToReports(bwc)
+                                .onErrorResume(ex -> {
+                                    log.error("Error notificando a reports-ms: {}", ex.getMessage());
+                                    return Mono.empty();
+                                })
+                                .thenReturn(saved)
+                        )
+                );
     }
 
+    private Mono<BootcampWithCapability> convertToBootcampWithCapability(Bootcamp bootcamp) {
+        if (bootcamp.capabilities().isEmpty()) {
+            return Mono.just(new BootcampWithCapability(
+                    bootcamp.id(),
+                    bootcamp.name(),
+                    bootcamp.description(),
+                    bootcamp.launchDate(),
+                    bootcamp.durationInDays(),
+                    List.of()
+            ));
+        }
+
+        return webClient.get()
+                .uri("http://localhost:8081/capabilities")
+                .retrieve()
+                .bodyToFlux(CapacityDTO.class)
+                .collectList()
+                .map(allCaps -> {
+                    Set<UUID> capIds = new HashSet<>(bootcamp.capabilities());
+                    List<Capability> capabilities = allCaps.stream()
+                            .filter(dto -> capIds.contains(dto.getId()))
+                            .map(dto -> new Capability(
+                                    dto.getId(),
+                                    dto.getName(),
+                                    dto.getTechnologies() != null
+                                            ? dto.getTechnologies().stream()
+                                            .map(t -> new Technology(t.getId(), t.getName()))
+                                            .toList()
+                                            : List.of()
+                            ))
+                            .toList();
+                    return new BootcampWithCapability(
+                            bootcamp.id(),
+                            bootcamp.name(),
+                            bootcamp.description(),
+                            bootcamp.launchDate(),
+                            bootcamp.durationInDays(),
+                            capabilities
+                    );
+                });
+    }
+
+    private Mono<Void> sendBootcampToReports(BootcampWithCapability bootcamp) {
+        List<String> capabilityNames = bootcamp.capabilities().stream()
+                .map(Capability::name)
+                .toList();
+
+        List<String> technologyNames = bootcamp.capabilities().stream()
+                .flatMap(cap -> cap.technologies().stream())
+                .map(Technology::name)
+                .distinct()
+                .toList();
+
+        var dto = new BootcampReportRequest(
+                bootcamp.name(),
+                bootcamp.description(),
+                bootcamp.launchDate().toString(),
+                bootcamp.durationInDays(),
+                capabilityNames,
+                technologyNames
+        );
+
+        return webClient.post()
+                .uri("http://localhost:8084/reports/bootcamps")
+                .bodyValue(dto)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
     @Override
     public Mono<Void> saveBootcampCapacity(UUID bootcampId, List<UUID> capacities) {
         log.info("Saving capacities for bootcamp {}: {}", bootcampId, capacities);
@@ -71,15 +156,12 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
     @Override
     public Mono<Boolean> validateExistingCapacity(List<UUID> capacities) {
         return webClient.get()
-                .uri("/capabilities/simple")
+                .uri("http://localhost:8081/capabilities/simple")
                 .retrieve()
                 .bodyToFlux(CapacityDTO.class)
                 .map(CapacityDTO::getId)
                 .collectList()
-                .map(allIds -> {
-                    Set<UUID> allIdsSet = Set.copyOf(allIds);
-                    return allIdsSet.containsAll(capacities);
-                });
+                .map(allIds -> Set.copyOf(allIds).containsAll(capacities));
     }
 
     public Mono<Bootcamp> saveBootcampWithCapacities(Bootcamp bootcamp, List<UUID> capacities) {
@@ -106,13 +188,7 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
         };
 
         Mono<List<CapacityDTO>> allCapabilitiesMono = webClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/capabilities")
-                        .queryParam("sortBy", "techCount")
-                        .queryParam("order", "asc")
-                        .queryParam("page", 0)
-                        .queryParam("size", 1000)
-                        .build())
+                .uri("http://localhost:8081/capabilities?sortBy=techCount&order=asc&page=0&size=1000")
                 .retrieve()
                 .bodyToFlux(CapacityDTO.class)
                 .collectList();
@@ -180,25 +256,62 @@ public class BootcampPersistenceAdapter implements IBootcampPersistencePort {
         return findCapabilitiesByBootcampId(bootcampId)
                 .flatMapMany(Flux::fromIterable)
                 .flatMap(capacityId ->
-                        // 2. llamar al MS capabilities para eliminar relación si ya no hay referencias
                         webClient.delete()
-                                .uri("/capabilities/{id}/bootcamp/{bootcampId}", capacityId, bootcampId)
+                                .uri("http://localhost:8081/capabilities/{id}/bootcamp/{bootcampId}", capacityId, bootcampId)
                                 .retrieve()
                                 .bodyToMono(Void.class)
                                 .onErrorResume(ex -> {
-                                    // loguear y continuar
                                     log.error("Error eliminando capacidad {} para bootcamp {}", capacityId, bootcampId, ex);
                                     return Mono.empty();
                                 })
                 )
                 .thenMany(
-                        // 3. eliminar relaciones de bootcamp_capabilities
                         bootcampCapacityRepository.findByBootcampId(bootcampId)
                                 .flatMap(rel -> bootcampCapacityRepository.deleteById(rel.getId()))
                 )
                 .then(
-                        // 4. eliminar el bootcamp
                         bootcampRepository.deleteById(bootcampId)
+                );
+    }
+
+    @Override
+    public Mono<Bootcamp> findById(UUID bootcampId) {
+        return bootcampRepository.findById(bootcampId)
+                .map(bootcampEntityMapper::toModel)
+                .flatMap(bootcamp ->
+                        bootcampCapacityRepository.findByBootcampId(bootcampId)
+                                .map(BootcampCapacityEntity::getCapacityId)
+                                .collectList()
+                                .flatMap(capIds -> webClient.get()
+                                        .uri("http://localhost:8081/capabilities/simple")
+                                        .retrieve()
+                                        .bodyToFlux(CapacityDTO.class)
+                                        .collectList()
+                                        .map(allCaps -> {
+                                            Set<UUID> capIdsSet = Set.copyOf(capIds);
+                                            List<Capability> capabilities = allCaps.stream()
+                                                    .filter(dto -> capIdsSet.contains(dto.getId()))
+                                                    .map(dto -> new Capability(
+                                                            dto.getId(),
+                                                            dto.getName(),
+                                                            dto.getTechnologies() != null
+                                                                    ? dto.getTechnologies().stream()
+                                                                    .map(t -> new Technology(t.getId(), t.getName()))
+                                                                    .toList()
+                                                                    : List.of()
+                                                    ))
+                                                    .toList();
+
+                                            return new Bootcamp(
+                                                    bootcamp.id(),
+                                                    bootcamp.name(),
+                                                    bootcamp.description(),
+                                                    bootcamp.launchDate(),
+                                                    bootcamp.durationInDays(),
+                                                    capabilities.stream().map(Capability::id).toList()
+                                            );
+                                        })
+                                )
                 );
     }
 }

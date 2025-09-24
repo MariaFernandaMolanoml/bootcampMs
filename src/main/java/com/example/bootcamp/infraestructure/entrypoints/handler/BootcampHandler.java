@@ -33,7 +33,7 @@ public class BootcampHandler {
         return request.bodyToMono(BootcampDTO.class)
                 .flatMap(dto -> {
                     Bootcamp bootcamp = bootcampMapper.dtoToModel(dto);
-                    List<UUID> capabilities = bootcamp.capabilities(); // getter correcto para record
+                    List<UUID> capabilities = bootcamp.capabilities();
                     return bootcampServicePort.registerBootcamp(bootcamp, capabilities);
                 })
                 .flatMap(saved -> {
@@ -89,7 +89,7 @@ public class BootcampHandler {
                 });
     }
     public Mono<ServerResponse> deleteBootcamp(ServerRequest request) {
-        UUID bootcampId = UUID.fromString(request.pathVariable("id")); // coincidir con el router
+        UUID bootcampId = UUID.fromString(request.pathVariable("id"));
         return bootcampServicePort.deleteBootcamp(bootcampId)
                 .then(Mono.defer(() -> {
                     ApiResponse response = ApiResponse.builder()
@@ -112,4 +112,10 @@ public class BootcampHandler {
                 });
     }
 
+    public Mono<ServerResponse> getBootcampById(ServerRequest request) {
+        String id = request.pathVariable("id");
+        return bootcampServicePort.getBootcampById(UUID.fromString(id))
+                .flatMap(bootcamp -> ServerResponse.ok().bodyValue(bootcamp))
+                .switchIfEmpty(ServerResponse.notFound().build());
+    }
 }
