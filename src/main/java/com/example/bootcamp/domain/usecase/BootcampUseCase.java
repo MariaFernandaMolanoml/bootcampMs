@@ -67,4 +67,8 @@ public class BootcampUseCase implements IBootcampServicePort {
     public Mono<Void> deleteBootcamp(UUID bootcampId) {
         return bootcampPersistencePort.deleteBootcamp(bootcampId);
     }
+    @Override
+    public Mono<Bootcamp> getBootcampById(UUID id) {
+        return bootcampPersistencePort.findById(id);
+    }
 }

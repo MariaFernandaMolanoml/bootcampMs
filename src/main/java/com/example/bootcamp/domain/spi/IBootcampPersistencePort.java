@@ -17,4 +17,5 @@ public interface IBootcampPersistencePort {
 
     Mono<Void> deleteBootcamp(UUID bootcampId);
     Mono<List<UUID>> findCapabilitiesByBootcampId(UUID bootcampId);
+    Mono<Bootcamp> findById(UUID id);
 }

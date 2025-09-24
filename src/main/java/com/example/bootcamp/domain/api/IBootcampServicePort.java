@@ -12,4 +12,5 @@ public interface IBootcampServicePort {
     Mono<Bootcamp> registerBootcamp(Bootcamp bootcamp, List<UUID> capabilities);
     Flux<BootcampWithCapability> getAllBootcamps(String order, String sortBy, int page, int size);
     Mono<Void> deleteBootcamp(UUID bootcampId);
+    Mono<Bootcamp> getBootcampById(UUID id);
 }
